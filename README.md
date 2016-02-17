@@ -1,1 +1,1 @@
-assignment1b from foundation of data mining
+assignment1b for foundation of data mining
