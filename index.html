@@ -3,8 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <script src="d3/d3.js" charset="utf-8"></script>
+    <script src="li.js" charset="utf-8"></script>
+    <style>
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: #000;
+            shape-rendering: crispEdges;
+        }</style>
+    <script>
+        var margin = {top: 20, right: 20, bottom: 20, left: 40};
+        var file = "C1.txt";
+        var dsv = d3.dsv("	", "text/plain");
+        var radius = 300;
+        var x = d3.scale.linear().range([0, 2 * radius]);
+        var y = d3.scale.linear().range([2 * radius, 0]);
+        dsv(file, function (error, data) {
+            if (error) throw error;
+            console.dir(data);
+            var d0max = list_reduce(data, "d0", larger_than);
+            var d0min = list_reduce(data, "d0", smaller_than);
+            var d1max = list_reduce(data, "d1", larger_than);
+            var d1min = list_reduce(data, "d1", smaller_than);
+            console.dir(d0max);
+            console.dir(d0min);
+            console.dir(d1max);
+            console.dir(d1min);
+            x.domain([Math.floor(d0min), Math.ceil(d0max)]);
+            y.domain([Math.floor(d1min), Math.ceil(d1max)]);
+            var svga = d3.select(".wrapper").append("svg")
+                    .attr("width", radius * 2 + margin.left + margin.right)
+                    .attr("height", radius * 2 + margin.top + margin.bottom)
+                    .append("g")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            svga.selectAll("circle").data(data, function (d) {
+                return d.index;
+            }).enter().append("circle").attr("r", 4)
+                    .attr("transform", function (d) {
+                        return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
+                    });
+
+            var xAxis = d3.svg.axis()
+                    .scale(x)
+                    .orient("bottom");
+
+            var yAxis = d3.svg.axis()
+                    .scale(y)
+                    .orient("left");
+            svga.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", "translate(0," + 2 * radius + ")")
+                    .call(xAxis)
+                    .append("text")
+                    .attr("class", "label")
+                    .attr("x", 2 * radius)
+                    .attr("y", -6)
+                    .style("text-anchor", "end")
+                    .text("x axis");
+
+            svga.append("g")
+                    .attr("class", "y axis")
+                    .call(yAxis)
+                    .append("text")
+                    .attr("class", "label")
+                    .attr("transform", "rotate(-90)")
+                    .attr("y", 6)
+                    .attr("dy", ".71em")
+                    .style("text-anchor", "end")
+                    .text("y axis")
+        })
+    </script>
 </head>
 <body>
-
+<div class="wrapper">
+</div>
 </body>
 </html>
