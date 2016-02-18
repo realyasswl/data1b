@@ -11,36 +11,188 @@
             fill: none;
             stroke: #000;
             shape-rendering: crispEdges;
-        }</style>
+        }
+
+        .dot {
+            fill: #000;
+        }
+
+        .center {
+            fill: #3020f0;
+        }
+
+        /*styles copy from voronoi*/
+
+        .vpath {
+            stroke: #fff;
+            fill-opacity: 0.6;
+        }
+
+    </style>
     <script>
-        var margin = {top: 20, right: 20, bottom: 20, left: 40};
-        var file = "C1.txt";
+        var margin = {top: 40, right: 40, bottom: 40, left: 40};
+        var file = "C2.txt";
         var dsv = d3.dsv("	", "text/plain");
-        var radius = 300;
+        var radius = 400;
         var x = d3.scale.linear().range([0, 2 * radius]);
         var y = d3.scale.linear().range([2 * radius, 0]);
+        var dataset;
+        var centers, temp_centers;
+        var k = 3;
+        var color = d3.scale.category20();
+        var keyset = [];
+        var voronoi = d3.geom.voronoi()
+                .clipExtent([[0, 0], [2 * radius, 2 * radius]]);
+        //voronoi path
+        var path;
+        var interval = 1200;
+        var d0max, d0min, d1max, d1min;
+        var svga;
         dsv(file, function (error, data) {
             if (error) throw error;
-            console.dir(data);
-            var d0max = list_reduce(data, "d0", larger_than);
-            var d0min = list_reduce(data, "d0", smaller_than);
-            var d1max = list_reduce(data, "d1", larger_than);
-            var d1min = list_reduce(data, "d1", smaller_than);
+            dataset = data;
+            keyset = d3.keys(data[0]).filter(function (k) {
+                return k != "index";
+            });
+//            init public variables
+            init(dataset);
+            draw(dataset);
+//            initialize centers
+            init_centers();
+            compute_centers();
+            console.dir(centers);
+            (function myLoop(j) {
+                setTimeout(function () {
+                    update_centers();
+                    if (temp_centers.every(function (d, i) {
+                                return keyset.every(function (k) {
+                                    return parseFloat(d[k]) == parseFloat(centers[i][k]);
+                                })
+                            })) {
+                        //finalize
+                        path.style("fill-opacity", 1);
+                    } else {
+                        myLoop(++j);
+                    }
+                }, interval)
+            })(0);
+            console.dir(centers);
+        });
+
+        function init(data) {
+            d0max = list_reduce(data, larger_than, function (d) {
+                return parseFloat(d["d0"]);
+            })["d0"];
+            d0min = list_reduce(data, smaller_than, function (d) {
+                return parseFloat(d["d0"]);
+            })["d0"];
+            d1max = list_reduce(data, larger_than, function (d) {
+                return parseFloat(d["d1"]);
+            })["d1"];
+            d1min = list_reduce(data, smaller_than, function (d) {
+                return parseFloat(d["d1"]);
+            })["d1"];
             console.dir(d0max);
             console.dir(d0min);
             console.dir(d1max);
             console.dir(d1min);
             x.domain([Math.floor(d0min), Math.ceil(d0max)]);
             y.domain([Math.floor(d1min), Math.ceil(d1max)]);
-            var svga = d3.select(".wrapper").append("svg")
+            svga = d3.select(".wrapper").append("svg")
                     .attr("width", radius * 2 + margin.left + margin.right)
                     .attr("height", radius * 2 + margin.top + margin.bottom)
-                    .append("g")
+                    .append("g").attr("class", "g")
                     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+            var tparr = [];
+            var tpindex = 0;
+            while (tpindex++ < k) {
+                tparr.push(0);
+            }
+            path = svga.selectAll(".vpath").data(voronoi(tparr.map(function (c, i) {
+                return [i, i];
+            })));
 
-            svga.selectAll("circle").data(data, function (d) {
+            path.enter().append("path").attr("class", "vpath")
+                    .attr("d", polygon).style("fill", color);
+        }
+
+        function compute_centers() {
+            dataset.forEach(function (dot) {
+                var center = list_reduce(centers, smaller_than, function (d) {
+                    return distance(dot, d, keyset)
+                });
+                center.dots.push(dot);
+            });
+            draw_centers();
+        }
+        function draw_centers() {
+            path = svga.selectAll(".vpath").data(voronoi(centers.map(function (c) {
+                return [x(c.d0), y(c.d1)];
+            })));
+            path.transition().duration(interval * .75).attr("d", polygon);
+
+//            path.exit().remove();
+//            path.enter().append("path")
+//                    .attr("d", polygon);
+//            path.order();
+
+            var cens = svga.selectAll(".center").data(centers);
+            cens.transition().duration(interval * .75).attr("transform", function (d) {
+                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
+            });
+            cens.enter().append("circle").attr("r", 4).attr("class", "center").attr("transform", function (d) {
+                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
+            });
+            cens.exit().remove();
+        }
+        function init_centers() {
+//            by picking first k elements in dataset
+            centers = deepcopy(dataset.slice(0, 3), keyset);
+//            by picking k elements from dataset randomly
+            var random_indexs = [];
+            var random_index = 0;
+            for (var i = 0; i < k; i++) {
+                random_index = Math.floor(Math.random() * dataset.length);
+                while (random_indexs.indexOf(random_index) >= 0) {
+                    random_index = Math.floor(Math.random() * dataset.length);
+                }
+                random_indexs.push(random_index);
+            }
+            centers = deepcopy(dataset.filter(function (d, i) {
+                return random_indexs.indexOf(i) >= 0;
+            }), keyset);
+            centers.forEach(function (d) {
+                return d.dots = [];
+            });
+        }
+        function update_centers() {
+            temp_centers = centers;
+            centers = centers.map(function (c) {
+                var r = {};
+                if (c.dots == null || c.dots.length == 0) {
+                    keyset.forEach(function (k) {
+                                r[k] = c[k];
+                            }
+                    );
+                } else {
+                    keyset.forEach(function (k) {
+                        r[k] = c.dots.map(function (d) {
+                                    return parseFloat(d[k]);
+                                }).reduce(function (d0, d1) {
+                                    return d0 + d1;
+                                }) / c.dots.length;
+                    });
+                }
+                r.dots = [];
+                return r;
+            });
+
+            compute_centers();
+        }
+        function draw(data) {
+            svga.selectAll(".dot").data(data, function (d) {
                 return d.index;
-            }).enter().append("circle").attr("r", 4)
+            }).enter().append("circle").attr("r", 2).attr("class", "dot")
                     .attr("transform", function (d) {
                         return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
                     });
@@ -73,7 +225,12 @@
                     .attr("dy", ".71em")
                     .style("text-anchor", "end")
                     .text("y axis")
-        })
+        }
+        /**voronoi implementation simply copy from
+         * http://bl.ocks.org/mbostock/4060366*/
+        function polygon(d) {
+            return "M" + d.join("L") + "Z";
+        }
     </script>
 </head>
 <body>
