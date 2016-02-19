@@ -28,9 +28,13 @@
             fill-opacity: 0.6;
         }
 
+        .message {
+            font-family: "DejaVu Sans";
+        }
     </style>
     <script>
-        var margin = {top: 40, right: 40, bottom: 40, left: 40};
+        var message_height = 80;
+        var margin = {top: message_height, right: 40, bottom: 40, left: 40};
         var file = "C2.txt";
         var dsv = d3.dsv("	", "text/plain");
         var radius = 400;
@@ -45,7 +49,7 @@
                 .clipExtent([[0, 0], [2 * radius, 2 * radius]]);
         //voronoi path
         var path;
-        var interval = 1200;
+        var interval = 1500;
         var d0max, d0min, d1max, d1min;
         var svga;
         dsv(file, function (error, data) {
@@ -61,8 +65,19 @@
             init_centers();
             compute_centers();
             console.dir(centers);
+
+            var messageg = svga.append("g").attr("height", message_height).attr("width", 2 * radius)
+                    .attr("class", ".messageg");
+            messageg.append("text")
+                    .attr("class", "message")
+                    .attr("dy", ".35em")
+                    .attr("transform", "translate(200,-40)")
+                    .style("text-anchor", "middle");
             (function myLoop(j) {
                 setTimeout(function () {
+                    messageg.selectAll(".message").text(function () {
+                        return "Attempting " + (j + 1) + " times;";
+                    });
                     update_centers();
                     if (temp_centers.every(function (d, i) {
                                 return keyset.every(function (k) {
@@ -71,6 +86,9 @@
                             })) {
                         //finalize
                         path.style("fill-opacity", 1);
+                        messageg.selectAll(".message").text(function () {
+                            return "Stabilized at " + j + " times;";
+                        });
                     } else {
                         myLoop(++j);
                     }
@@ -125,30 +143,38 @@
             });
             draw_centers();
         }
-        function draw_centers() {
-            path = svga.selectAll(".vpath").data(voronoi(centers.map(function (c) {
-                return [x(c.d0), y(c.d1)];
-            })));
-            path.transition().duration(interval * .75).attr("d", polygon);
-
-//            path.exit().remove();
-//            path.enter().append("path")
-//                    .attr("d", polygon);
-//            path.order();
-
-            var cens = svga.selectAll(".center").data(centers);
-            cens.transition().duration(interval * .75).attr("transform", function (d) {
-                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-            });
-            cens.enter().append("circle").attr("r", 4).attr("class", "center").attr("transform", function (d) {
-                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-            });
-            cens.exit().remove();
+        function draw_centers(update_path, update_center) {
+            if (update_path == undefined) {
+                update_path = true;
+            }
+            if (update_center == undefined) {
+                update_center = true;
+            }
+            if (update_path) {
+                path = svga.selectAll(".vpath").data(voronoi(centers.map(function (c) {
+                    return [x(c.d0), y(c.d1)];
+                })));
+                path.transition().duration(interval * .75).attr("d", polygon);
+            }
+            if (update_center) {
+                var cens = svga.selectAll(".center").data(centers);
+                cens.transition().duration(interval * .75).attr("transform", function (d) {
+                    return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
+                });
+                cens.enter().append("circle").attr("r", 4).attr("class", "center").attr("transform", function (d) {
+                    return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
+                });
+                cens.exit().remove();
+            }
         }
-        function init_centers() {
-//            by picking first k elements in dataset
-            centers = deepcopy(dataset.slice(0, 3), keyset);
-//            by picking k elements from dataset randomly
+
+        //            by picking first k elements in dataset
+        function first() {
+            centers = deepcopy(dataset.slice(0, k), keyset);
+        }
+        //            by picking k elements from dataset randomly
+        //silly implementation
+        function random_pick() {
             var random_indexs = [];
             var random_index = 0;
             for (var i = 0; i < k; i++) {
@@ -164,6 +190,57 @@
             centers.forEach(function (d) {
                 return d.dots = [];
             });
+        }
+        //k-means++
+        function kmeans_plusplus() {
+//           temp properties with which we calculate the cumulative distance and select the centers
+            var temp_property_distance = "distance";
+            var temp_property_center = "center";
+            var temp_property_cumulate = "cumu";
+            centers = [];
+//            pick first randomly
+            var temp_dataset = deepcopy(dataset, keyset);
+            var ran = Math.floor(Math.random() * dataset.length);
+            temp_dataset[ran].dots = []
+            centers.push(temp_dataset[ran]);
+            temp_dataset.splice(ran, 1);
+
+            (function myLoop(j) {
+                setTimeout(function () {
+//                calculate min distance and cumulative distance for each point
+                    temp_dataset.forEach(function (d, i) {
+                        var per_center = list_reduce(centers, smaller_than, function (e) {
+                            return distance(e, d, keyset);
+                        });
+                        d[temp_property_center] = per_center;
+                        d[temp_property_distance] = distance(d, per_center, keyset);
+                        d[temp_property_cumulate] = i == 0
+                                ? d[temp_property_distance]
+                                : d[temp_property_distance] + temp_dataset[i - 1][temp_property_cumulate];
+                    });
+                    var random_value = Math.random() * temp_dataset.slice(-1)[0][temp_property_cumulate];
+                    for (var i in temp_dataset) {
+                        if (temp_dataset[i][temp_property_cumulate] > random_value) {
+                            temp_dataset[i].dots = [];
+                            centers.push(temp_dataset[i]);
+                            temp_dataset.splice(i, 1);
+                            break;
+                        }
+                    }
+                    draw_centers(false, true);
+                    if (centers.length == k) {
+                        //finalize
+                    } else {
+                        myLoop(++j);
+                    }
+                }, interval)
+            })(0);
+        }
+
+        function init_centers() {
+//            first()
+            random_pick();
+//            kmeans_plusplus();
         }
         function update_centers() {
             temp_centers = centers;
