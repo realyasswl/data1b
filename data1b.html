@@ -3,11 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
-    <script src="d3/d3.js" charset="utf-8"></script>
-    <script src="li.js" charset="utf-8"></script>
+    <link rel="stylesheet" href="static/style.css">
+    <script src="static/d3.js" charset="utf-8"></script>
+    <script src="static/li.js" charset="utf-8"></script>
+    <script src="static/jquery-2.2.0.js"></script>
     <style>
+        .wrapper1
         .wrapper {
+            float: left;
             width: 1200px;
+            height: 900px;
+        }
+
+        .controller {
+            padding: 60px;
+            float: right;
+
         }
 
         .axis path,
@@ -41,12 +52,14 @@
 //            first();
 //            random_pick();
 //            kmeans_plusplus();
-            gonzales();
+//            gonzales();
+            pick_function();
         }
-
+        var pick_function;
+        var sourcetype;
         var message_height = 80;
-        var margin = {top: message_height, right: 40, bottom: 40, left: 40};
-        var file = "C2.txt";
+        var margin = {top: message_height, right: 40, bottom: 40, left: 60};
+        var file = "C1.txt";
         var dsv = d3.dsv("	", "text/plain");
         var radius = 400;
         var x = d3.scale.linear().range([0, 2 * radius]);
@@ -54,7 +67,7 @@
         var dataset;
         //       temp_centers will be used to decide if the process finalized or stabilized
         var centers, temp_centers;
-        var k = 3;
+        var k = 5;
         var color = d3.scale.category20();
         //        store keys, namely "d0","d1",... and so on.
         var keyset = [];
@@ -69,18 +82,7 @@
         var svga;
         //        this variable used in gonzales algorithms to store the dot with max distance from each center
         var temp_property_center_maxdistdot = "maxdistdot";
-        dsv(file, function (error, data) {
-            if (error) throw error;
-            dataset = data;
-            keyset = d3.keys(data[0]).filter(function (k) {
-                return k != "index";
-            });
-//            init public variables
-            init(dataset);
-            draw(dataset);
-//            initialize centers
-            init_centers();
-        });
+
         function recursively_update_centers() {
             compute_centers();
             messageg.append("text")
@@ -282,22 +284,7 @@
             (function gonzales_inner_loop(j) {
                 draw_centers(false, true);
                 setTimeout(function () {
-//                calculate min distance and cumulative distance for each point
-                    temp_dataset.forEach(function (d, i) {
-                        centers.forEach(function (c, j) {
-                            distance(c, d, keyset);
-                        });
-                        var per_center = list_reduce(centers, smaller_than, function (e) {
-                            return distance(e, d, keyset);
-                        });
-                        var tem_dist = distance(d, per_center, keyset);
-                        d[temp_property_center] = per_center;
-                        d[temp_property_distance] = tem_dist;
-//                        update per_center's max distance to larger one
-                        per_center[temp_property_center_dist] = tem_dist;
-                        per_center[temp_property_center_maxdistdot] = d;
-                    });
-                    draw_gonzales_circle();
+                    update_gonzales(temp_dataset, temp_property_center_dist, temp_property_center, temp_property_distance);
 
                     var temp_element = list_reduce(temp_dataset, larger_than, function (e) {
                         return e[temp_property_distance];
@@ -308,9 +295,11 @@
                     temp_element[temp_property_center_maxdistdot] = temp_element;
                     centers.push(temp_element);
                     temp_dataset.splice(temp_dataset.indexOf(temp_element), 1);
-                    console.dir(centers);
                     if (centers.length == k) {
                         //finalize
+                        setTimeout(function () {
+                            update_gonzales(temp_dataset, temp_property_center_dist, temp_property_center, temp_property_distance);
+                        }, interval);
                         console.dir("gonzales finalize");
                         draw_centers(false, true);
                         setTimeout(recursively_update_centers, interval);
@@ -319,6 +308,29 @@
                     }
                 }, interval)
             })(0);
+        }
+
+        //this is a ugly function which is used just to wrap codes
+        function update_gonzales(temp_dataset, temp_property_center_dist, temp_property_center, temp_property_distance) {
+
+            centers.forEach(function (c) {
+                c[temp_property_center_dist] = 0;
+            });
+//                calculate min distance and cumulative distance for each point
+            temp_dataset.forEach(function (d, i) {
+                var per_center = list_reduce(centers, smaller_than, function (e) {
+                    return distance(e, d, keyset);
+                });
+                var tem_dist = distance(d, per_center, keyset);
+                d[temp_property_center] = per_center;
+                d[temp_property_distance] = tem_dist;
+//                        update per_center's max distance to larger one
+                if (tem_dist > per_center[temp_property_center_dist]) {
+                    per_center[temp_property_center_dist] = tem_dist;
+                    per_center[temp_property_center_maxdistdot] = d;
+                }
+            });
+            draw_gonzales_circle();
         }
 
         function draw_gonzales_circle() {
@@ -330,12 +342,12 @@
                     }).attr("transform", function (d) {
                 return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
             });
-            gonzales_circle.enter().append("circle").attr("r", function (d) {
+            gonzales_circle.enter().append("circle").style("fill-opacity", .1).attr("transform", function (d) {
+                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
+            }).attr("class", "gonzales_circle").attr("r", 0).transition().duration(interval * .75).attr("r", function (d) {
                 return Math.sqrt(Math.pow(x(d.d0) - x(d[temp_property_center_maxdistdot].d0), 2) +
                         Math.pow(y(d.d1) - y(d[temp_property_center_maxdistdot].d1), 2));
-            }).style("fill-opacity", .1).attr("transform", function (d) {
-                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-            }).attr("class","gonzales_circle");
+            });
             gonzales_circle.exit().remove();
         }
 
@@ -405,13 +417,115 @@
         function polygon(d) {
             return "M" + d.join("L") + "Z";
         }
+
     </script>
 </head>
 <body>
-<div class="wrapper">
+<div class="wrapper1">
+    <div class="wrapper">
+    </div>
 </div>
-<div class="control">
+<div class="controller">
+    <input type="button" onclick="refresh()" value="Fire (AFTER animation stops)"/><br>
 
+    <h2 id="radio0">Source</h2>
+    <p>
+        <label>
+            <input type='radio' name="source" value="C1.txt" checked>
+            <span class="checkable">C1.txt</span>
+        </label>
+    </p>
+    <p>
+        <label>
+            <input type='radio' name="source" value="C2.txt">
+            <span class="checkable">C2.txt</span>
+        </label>
+    </p>
+    <p>
+        <label>
+            <input type='radio' name="source" value="random">
+            <span class="checkable">random</span>
+        </label>
+    </p>
+
+
+    <h2 id="radio1">How to pick k dots</h2>
+    <p>
+        <label>
+            <input type='radio' name="algo" value="a" checked>
+            <span class="checkable">first k (a)</span>
+        </label>
+    </p>
+    <p>
+        <label>
+            <input type='radio' name="algo" value="b">
+            <span class="checkable">random (b)</span>
+        </label>
+    </p>
+    <p>
+        <label>
+            <input type='radio' name="algo" value="c">
+            <span class="checkable">k-menas++ (c)</span>
+        </label>
+    </p>
+    <p>
+        <label>
+            <input type='radio' name="algo" value="d">
+            <span class="checkable">gonzales (d)</span>
+        </label>
+    </p>
+    <input type="range" name="k"  value="4" min="3" max="5">
 </div>
+<script>
+    function refresh() {
+        d3.selectAll("circle").transition();
+        d3.select(".wrapper").remove();
+        d3.select(".wrapper1").append("div").attr("class", "wrapper");
+        switch ($('input[name="algo"]:checked').val()) {
+            case "a":
+                pick_function = first;
+                break;
+            case "b":
+                pick_function = random_pick;
+                break;
+            case "c":
+                pick_function = kmeans_plusplus;
+                break;
+            case "d":
+                pick_function = gonzales;
+                break;
+            default:
+                pick_function = first;
+        }
+        k=$('input[name="k"]').val();
+
+        sourcetype = $('input[name="source"]:checked').val();
+        if (sourcetype == "random") {
+            dataset = randomdataset(k, 400, 200, .3, .03);
+            keyset = d3.keys(dataset[0]).filter(function (k) {
+                return k != "index";
+            });
+//            init public variables
+            init(dataset);
+            draw(dataset);
+//            initialize centers
+            init_centers();
+        } else {
+            dsv(sourcetype, function (error, data) {
+                if (error) throw error;
+                console.dir(data);
+                dataset = data.slice();
+                keyset = d3.keys(dataset[0]).filter(function (k) {
+                    return k != "index";
+                });
+//            init public variables
+                init(dataset);
+                draw(dataset);
+//            initialize centers
+                init_centers();
+            });
+        }
+    }
+</script>
 </body>
 </html>
