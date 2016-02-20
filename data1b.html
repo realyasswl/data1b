@@ -80,8 +80,17 @@
         var interval = 1500;
         var d0max, d0min, d1max, d1min;
         var svga;
+
+
         //        this variable used in gonzales algorithms to store the dot with max distance from each center
         var temp_property_center_maxdistdot = "maxdistdot";
+
+        //           temp properties with which we calculate the cumulative distance and select the centers
+        var temp_property_distance = "distance";
+        var temp_property_center = "center";
+        var temp_property_cumulate = "cumu";
+
+        var temp_property_center_dist = "dist";
 
         function recursively_update_centers() {
             compute_centers();
@@ -113,24 +122,28 @@
             })(0);
         }
         function init(data) {
-            d0max = list_reduce(data, larger_than, function (d) {
+            d0max = Math.ceil(list_reduce(data, larger_than, function (d) {
                 return parseFloat(d["d0"]);
-            })["d0"];
-            d0min = list_reduce(data, smaller_than, function (d) {
+            })["d0"]);
+            d0min = Math.floor(list_reduce(data, smaller_than, function (d) {
                 return parseFloat(d["d0"]);
-            })["d0"];
-            d1max = list_reduce(data, larger_than, function (d) {
+            })["d0"]);
+            d1max = Math.ceil(list_reduce(data, larger_than, function (d) {
                 return parseFloat(d["d1"]);
-            })["d1"];
-            d1min = list_reduce(data, smaller_than, function (d) {
+            })["d1"]);
+            d1min = Math.floor(list_reduce(data, smaller_than, function (d) {
                 return parseFloat(d["d1"]);
-            })["d1"];
-            console.dir(d0max);
-            console.dir(d0min);
-            console.dir(d1max);
-            console.dir(d1min);
-            x.domain([Math.floor(d0min), Math.ceil(d0max)]);
-            y.domain([Math.floor(d1min), Math.ceil(d1max)]);
+            })["d1"]);
+            var subr = d0max - d0min - (d1max - d1min);
+            if (subr >0) {
+                d1min -= subr / 2;
+                d1max += subr / 2;
+            } else {
+                d0min += subr / 2;
+                d0max -= subr / 2;
+            }
+            x.domain([d0min, d0max]);
+            y.domain([d1min, d1max]);
             svga = d3.select(".wrapper").append("svg")
                     .attr("width", radius * 2 + margin.left + margin.right)
                     .attr("height", radius * 2 + margin.top + margin.bottom)
@@ -218,10 +231,6 @@
         }
         //k-means++
         function kmeans_plusplus() {
-//           temp properties with which we calculate the cumulative distance and select the centers
-            var temp_property_distance = "distance";
-            var temp_property_center = "center";
-            var temp_property_cumulate = "cumu";
             centers = [];
 //            pick first randomly
             var temp_dataset = deepcopy(dataset, keyset);
@@ -267,16 +276,12 @@
         }
 
         function gonzales() {
-//           temp properties with which we calculate the cumulative distance and select the centers
-            var temp_property_distance = "distance";
-            var temp_property_center = "center";
-            var temp_property_cumulate = "cumu";
-
-            var temp_property_center_dist = "dist";
             centers = [];
 //            pick first randomly
             var temp_dataset = deepcopy(dataset, keyset);
-            var ran = Math.floor(Math.random() * dataset.length);
+//            var ran = Math.floor(Math.random() * dataset.length);
+//            pick first
+            var ran = 0;
             temp_dataset[ran].dots = [];
             temp_dataset[ran][temp_property_center_dist] = 0;
             centers.push(temp_dataset[ran]);
@@ -284,12 +289,13 @@
             (function gonzales_inner_loop(j) {
                 draw_centers(false, true);
                 setTimeout(function () {
-                    update_gonzales(temp_dataset, temp_property_center_dist, temp_property_center, temp_property_distance);
+                    update_gonzales(temp_dataset);
 
                     var temp_element = list_reduce(temp_dataset, larger_than, function (e) {
                         return e[temp_property_distance];
                     });
                     delete temp_element[temp_property_center];
+                    delete temp_element[temp_property_distance];
                     temp_element.dots = [];
                     temp_element[temp_property_center_dist] = 0;
                     temp_element[temp_property_center_maxdistdot] = temp_element;
@@ -298,9 +304,9 @@
                     if (centers.length == k) {
                         //finalize
                         setTimeout(function () {
-                            update_gonzales(temp_dataset, temp_property_center_dist, temp_property_center, temp_property_distance);
+                            update_gonzales(temp_dataset);
                         }, interval);
-                        console.dir("gonzales finalize");
+//                        console.dir("gonzales finalize");
                         draw_centers(false, true);
                         setTimeout(recursively_update_centers, interval);
                     } else {
@@ -311,9 +317,8 @@
         }
 
         //this is a ugly function which is used just to wrap codes
-        function update_gonzales(temp_dataset, temp_property_center_dist, temp_property_center, temp_property_distance) {
-
-            centers.forEach(function (c) {
+        function update_gonzales(temp_dataset) {
+            centers.forEach(function (c, i) {
                 c[temp_property_center_dist] = 0;
             });
 //                calculate min distance and cumulative distance for each point
@@ -324,7 +329,9 @@
                 var tem_dist = distance(d, per_center, keyset);
                 d[temp_property_center] = per_center;
                 d[temp_property_distance] = tem_dist;
+
 //                        update per_center's max distance to larger one
+//                TODO may have bug in following if statement
                 if (tem_dist > per_center[temp_property_center_dist]) {
                     per_center[temp_property_center_dist] = tem_dist;
                     per_center[temp_property_center_maxdistdot] = d;
@@ -426,6 +433,7 @@
     </div>
 </div>
 <div class="controller">
+    <!--<input type="button" onclick="printdataset()" value="Print"/><br>-->
     <input type="button" onclick="refresh()" value="Fire (AFTER animation stops)"/><br>
 
     <h2 id="radio0">Source</h2>
@@ -474,9 +482,27 @@
             <span class="checkable">gonzales (d)</span>
         </label>
     </p>
-    <input type="range" name="k"  value="4" min="3" max="5">
+    <input type="range" name="k" value="4" min="3" max="5">
 </div>
 <script>
+//    test();
+    function test() {
+        pick_function = gonzales;
+        k = 4;
+        d3.csv("t.txt", function (error, data) {
+            if (error) throw error;
+            console.dir(data);
+            dataset = data.slice();
+            keyset = d3.keys(dataset[0]).filter(function (k) {
+                return k != "index";
+            });
+//            init public variables
+            init(dataset);
+            draw(dataset);
+//            initialize centers
+            init_centers();
+        });
+    }
     function refresh() {
         d3.selectAll("circle").transition();
         d3.select(".wrapper").remove();
@@ -497,11 +523,11 @@
             default:
                 pick_function = first;
         }
-        k=$('input[name="k"]').val();
+        k = $('input[name="k"]').val();
 
         sourcetype = $('input[name="source"]:checked').val();
         if (sourcetype == "random") {
-            dataset = randomdataset(k, 400, 200, .3, .03);
+            dataset = randomdataset(k, 60, 100, .3, .03);
             keyset = d3.keys(dataset[0]).filter(function (k) {
                 return k != "index";
             });
@@ -525,6 +551,13 @@
                 init_centers();
             });
         }
+    }
+    function printdataset() {
+        console.dir(dataset);
+        console.log("index,d0,d1");
+        dataset.forEach(function (d) {
+            console.log(d.index + "," + d.d0 + "," + d.d1);
+        });
     }
 </script>
 </body>
