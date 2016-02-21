@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>data1b</title>
+    <title>data1b no GUI</title>
     <link rel="stylesheet" href="static/style.css">
     <script src="static/d3.js" charset="utf-8"></script>
     <script src="static/li.js" charset="utf-8"></script>
@@ -11,20 +11,13 @@
         .wrapper1
         .wrapper {
             float: left;
-            width: 900px;
+            width: 1200px;
             height: 900px;
         }
 
         .controller {
-            padding: 60px 20px 0 20px;
+            padding: 60px;
             float: right;
-        }
-
-        .message_div {
-            height: 900px;
-            padding: 60px 0 0 0;
-            float: left;
-            width: 600px;
         }
 
         .axis path,
@@ -54,62 +47,32 @@
         }
     </style>
     <script>
-        function init_centers() {
-//            first();
-//            random_pick();
-//            kmeans_plusplus();
-//            gonzales();
-            pick_function();
-        }
         var pick_function;
         var sourcetype;
-        var message_height = 80;
-        var margin = {top: 40, right: 40, bottom: 40, left: 60};
+        var message_height = 120;
+        var margin = {top: message_height, right: 40, bottom: 40, left: 60};
         var file = "C1.txt";
         var dsv = d3.dsv("	", "text/plain");
         var radius = 400;
-        var x = d3.scale.linear().range([0, 2 * radius]);
-        var y = d3.scale.linear().range([2 * radius, 0]);
         var dataset;
         //       temp_centers will be used to decide if the process finalized or stabilized
         var centers, temp_centers;
         var k = 5;
-        var color = d3.scale.category20();
         //        store keys, namely "d0","d1",... and so on.
         var keyset = [];
-        //        use d3 build-in function to calculate voronoi diagram
-        var voronoi = d3.geom.voronoi()
-                .clipExtent([[0, 0], [2 * radius, 2 * radius]]);
-        //voronoi path
-        var path, gonzales_circle;
-        var messageg;
-        var interval = 1000;
-        var d0max, d0min, d1max, d1min;
-        var svga;
-
-
+        var interval = 0;
         //        this variable used in gonzales algorithms to store the dot with max distance from each center
         var temp_property_center_maxdistdot = "maxdistdot";
-
         //           temp properties with which we calculate the cumulative distance and select the centers
         var temp_property_distance = "distance";
         var temp_property_center = "center";
         var temp_property_cumulate = "cumu";
-
         var temp_property_center_dist = "dist";
 
         function recursively_update_centers() {
             compute_centers();
-//            messageg.append("text")
-//                    .attr("class", "message")
-//                    .attr("dy", ".35em")
-//                    .attr("transform", "translate(200,-40)")
-//                    .style("text-anchor", "middle");
             (function myLoop(j) {
                 setTimeout(function () {
-                    messageg.selectAll(".message").text(function () {
-                        return "Attempting " + (j + 1) + " times;";
-                    });
                     update_centers();
                     if (temp_centers.every(function (d, i) {
                                 return keyset.every(function (k) {
@@ -117,8 +80,9 @@
                                 })
                             })) {
                         //finalize
-                        path.style("fill-opacity", 1);
-                        var display_message = "Stabilized at " + j + " times;";
+//                        compute statistics here
+
+                        console.log("Stabilized after ", j, "times attempts.");
                         centers.sort(function (a, b) {
                             return a.dots.length - b.dots.length;
                         }).forEach(function (d, i) {
@@ -127,74 +91,13 @@
                                 d.adist += distance(d, a, keyset);
                             });
                             d.adist = d.adist / d.dots.length;
-                            console.log("Center", i, "has", d.dots.length, "elements with avarage distance", d.adist);
+                            console.log("Center", i, "has", d.dots.length,"elements with avarage distance", d.adist);
                         });
-                        messageg.selectAll(".message").text(display_message);
-                        messageg.selectAll(".message_detail").data(centers.sort(function (a, b) {
-                            return a.dots.length - b.dots.length;
-                        })).enter().append("text").attr("class", "message_detail").text(function (d, i) {
-                            d.adist = 0;
-                            d.dots.forEach(function (a) {
-                                d.adist += distance(d, a, keyset);
-                            });
-                            d.adist = d.adist / d.dots.length;
-                            return "Center" + i + " has " + d.dots.length
-                                    + " elements with avarage distance=" + Math.round(d.adist * 1000) / 1000;
-                        }).attr("transform", function (d, i) {
-                            return "translate(240," + 40 * (i+2) + ")";
-                        }).attr("dy", ".35em").style("text-anchor", "middle");
-
                     } else {
                         myLoop(++j);
                     }
                 }, interval)
             })(0);
-        }
-        function init(data) {
-            d0max = Math.ceil(list_reduce(data, larger_than, function (d) {
-                return parseFloat(d["d0"]);
-            })["d0"]);
-            d0min = Math.floor(list_reduce(data, smaller_than, function (d) {
-                return parseFloat(d["d0"]);
-            })["d0"]);
-            d1max = Math.ceil(list_reduce(data, larger_than, function (d) {
-                return parseFloat(d["d1"]);
-            })["d1"]);
-            d1min = Math.floor(list_reduce(data, smaller_than, function (d) {
-                return parseFloat(d["d1"]);
-            })["d1"]);
-            var subr = d0max - d0min - (d1max - d1min);
-            if (subr > 0) {
-                d1min -= subr / 2;
-                d1max += subr / 2;
-            } else {
-                d0min += subr / 2;
-                d0max -= subr / 2;
-            }
-            x.domain([d0min, d0max]);
-            y.domain([d1min, d1max]);
-            svga = d3.select(".wrapper").append("svg")
-                    .attr("width", radius * 2 + margin.left + margin.right)
-                    .attr("height", radius * 2 + margin.top + margin.bottom)
-                    .append("g").attr("class", "g")
-                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-            var tparr = [];
-            var tpindex = 0;
-            while (tpindex++ < k) {
-                tparr.push(0);
-            }
-            path = svga.selectAll(".vpath").data(voronoi(tparr.map(function (c, i) {
-                return [i, i];
-            })));
-
-            path.enter().append("path").attr("class", "vpath")
-                    .attr("d", polygon).style("fill", color);
-//            message_svg = d3.select(".message_div").append("svg")
-//                    .attr("width", 400)
-//                    .attr("height", 800)
-//                    .append("g").attr("class", "g");
-//            messageg = svga.append("g").attr("height", message_height).attr("width", 2 * radius)
-//                    .attr("class", ".messageg");
         }
 
         function compute_centers() {
@@ -204,45 +107,21 @@
                 });
                 center.dots.push(dot);
             });
-            draw_centers();
-        }
-        function draw_centers(update_path, update_center) {
-            if (update_path == undefined) {
-                update_path = true;
-            }
-            if (update_center == undefined) {
-                update_center = true;
-            }
-            if (update_path) {
-                path = svga.selectAll(".vpath").data(voronoi(centers.map(function (c) {
-                    return [x(c.d0), y(c.d1)];
-                })));
-                path.transition().duration(interval * .75).attr("d", polygon);
-            }
-            if (update_center) {
-                var cens = svga.selectAll(".center").data(centers);
-                cens.transition().duration(interval * .75).attr("transform", function (d) {
-                    return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-                });
-                cens.enter().append("circle").attr("r", 40).attr("class", "center").attr("transform", function (d) {
-                    return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-                }).transition().duration(interval * .75).attr("r", 4);
-                cens.exit().remove();
-            }
         }
 
         //            by picking first k elements in dataset
         function first() {
+            centers = [];
             centers = deepcopy(dataset.slice(0, k), keyset).map(function (c) {
                 c.dots = [];
                 return c;
             });
-            draw_centers(false, true);
-            setTimeout(recursively_update_centers, interval);
+            recursively_update_centers();
         }
         //            by picking k elements from dataset randomly
         //silly implementation
         function random_pick() {
+            centers = [];
             var random_indexs = [];
             var random_index = 0;
             for (var i = 0; i < k; i++) {
@@ -258,9 +137,9 @@
             centers.forEach(function (d) {
                 return d.dots = [];
             });
-            draw_centers(false, true);
-            setTimeout(recursively_update_centers, interval);
+            recursively_update_centers();
         }
+
         //k-means++
         function kmeans_plusplus() {
             centers = [];
@@ -272,7 +151,6 @@
             temp_dataset.splice(ran, 1);
 
             (function kmeans_plusplus_inner_loop(j) {
-                draw_centers(false);
                 setTimeout(function () {
 //                calculate min distance and cumulative distance for each point
                     temp_dataset.forEach(function (d, i) {
@@ -297,9 +175,7 @@
 
                     if (centers.length == k) {
                         //finalize
-                        console.dir("kmeans++ finalize");
-                        draw_centers(false, true);
-                        setTimeout(recursively_update_centers, interval);
+                        recursively_update_centers();
                     } else {
                         kmeans_plusplus_inner_loop(++j);
                     }
@@ -309,9 +185,7 @@
 
         function gonzales() {
             centers = [];
-//            pick first randomly
             var temp_dataset = deepcopy(dataset, keyset);
-//            var ran = Math.floor(Math.random() * dataset.length);
 //            pick first
             var ran = 0;
             temp_dataset[ran].dots = [];
@@ -319,7 +193,6 @@
             centers.push(temp_dataset[ran]);
             temp_dataset.splice(ran, 1);
             (function gonzales_inner_loop(j) {
-                draw_centers(false, true);
                 setTimeout(function () {
                     update_gonzales(temp_dataset);
 
@@ -335,12 +208,8 @@
                     temp_dataset.splice(temp_dataset.indexOf(temp_element), 1);
                     if (centers.length == k) {
                         //finalize
-                        setTimeout(function () {
-                            update_gonzales(temp_dataset);
-                        }, interval);
-//                        console.dir("gonzales finalize");
-                        draw_centers(false, true);
-                        setTimeout(recursively_update_centers, interval);
+                        update_gonzales(temp_dataset);
+                        recursively_update_centers();
                     } else {
                         gonzales_inner_loop(++j);
                     }
@@ -363,31 +232,11 @@
                 d[temp_property_distance] = tem_dist;
 
 //                        update per_center's max distance to larger one
-//                TODO may have bug in following if statement
                 if (tem_dist > per_center[temp_property_center_dist]) {
                     per_center[temp_property_center_dist] = tem_dist;
                     per_center[temp_property_center_maxdistdot] = d;
                 }
             });
-            draw_gonzales_circle();
-        }
-
-        function draw_gonzales_circle() {
-            gonzales_circle = svga.selectAll(".gonzales_circle").data(centers);
-            gonzales_circle.transition().duration(interval * .75)
-                    .attr("r", function (d) {
-                        return Math.sqrt(Math.pow(x(d.d0) - x(d[temp_property_center_maxdistdot].d0), 2) +
-                                Math.pow(y(d.d1) - y(d[temp_property_center_maxdistdot].d1), 2));
-                    }).attr("transform", function (d) {
-                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-            });
-            gonzales_circle.enter().append("circle").style("fill-opacity", .1).attr("transform", function (d) {
-                return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-            }).attr("class", "gonzales_circle").attr("r", 0).transition().duration(interval * .75).attr("r", function (d) {
-                return Math.sqrt(Math.pow(x(d.d0) - x(d[temp_property_center_maxdistdot].d0), 2) +
-                        Math.pow(y(d.d1) - y(d[temp_property_center_maxdistdot].d1), 2));
-            });
-            gonzales_circle.exit().remove();
         }
 
         function update_centers() {
@@ -411,50 +260,7 @@
                 r.dots = [];
                 return r;
             });
-
             compute_centers();
-        }
-        function draw(data) {
-            svga.selectAll(".dot").data(data, function (d) {
-                return d.index;
-            }).enter().append("circle").attr("r", 2).attr("class", "dot")
-                    .attr("transform", function (d) {
-                        return "translate(" + x(d.d0) + "," + y(d.d1) + ")";
-                    });
-
-            var xAxis = d3.svg.axis()
-                    .scale(x)
-                    .orient("bottom");
-
-            var yAxis = d3.svg.axis()
-                    .scale(y)
-                    .orient("left");
-            svga.append("g")
-                    .attr("class", "x axis")
-                    .attr("transform", "translate(0," + 2 * radius + ")")
-                    .call(xAxis)
-                    .append("text")
-                    .attr("class", "label")
-                    .attr("x", 2 * radius)
-                    .attr("y", -6)
-                    .style("text-anchor", "end")
-                    .text("x axis");
-
-            svga.append("g")
-                    .attr("class", "y axis")
-                    .call(yAxis)
-                    .append("text")
-                    .attr("class", "label")
-                    .attr("transform", "rotate(-90)")
-                    .attr("y", 6)
-                    .attr("dy", ".71em")
-                    .style("text-anchor", "end")
-                    .text("y axis")
-        }
-        /**voronoi implementation simply copy from
-         * http://bl.ocks.org/mbostock/4060366*/
-        function polygon(d) {
-            return "M" + d.join("L") + "Z";
         }
 
     </script>
@@ -464,18 +270,9 @@
     <div class="wrapper">
     </div>
 </div>
-<div class="message_div">
-    <svg height="900" width="600">
-        <g class="messageg">
-            <text class="message" dy=".35em" transform="translate(200,40)" style="text-anchor: middle;">
-            </text>
-        </g>
-    </svg>
-</div>
 <div class="controller">
     <!--<input type="button" onclick="printdataset()" value="Print"/><br>-->
-    <input type="button" onclick="refresh()" value="Fire (AFTER animation stops)"/><br>
-
+    <input type="button" onclick="refresh()" value="Fire"/><br>
     <h2 id="radio0">Source</h2>
     <p>
         <label>
@@ -524,28 +321,63 @@
     <a href="https://github.com/realyasswl/data1b">github</a>
 </div>
 <script>
-    //    test();
+    test();
     function test() {
-        pick_function = gonzales;
-        k = 4;
-        d3.csv("t.txt", function (error, data) {
+        dsv("C2.txt", function (error, data) {
             if (error) throw error;
-            console.dir(data);
             dataset = data.slice();
             keyset = d3.keys(dataset[0]).filter(function (k) {
                 return k != "index";
             });
-//            init public variables
-            init(dataset);
-            draw(dataset);
-//            initialize centers
-            init_centers();
+
+            var ar_o = [
+                {f: first, n: 0, m: "a"},
+                {f: random_pick, n: 4, m: "b"},
+                {f: kmeans_plusplus, n: 4, m: "c"},
+                {f: gonzales, n: 0, m: "d"}];
+            var ar_q = [3, 4, 5];
+
+            function runfunc(o, p, q, cbf) {
+                cbf(o, p, q);
+            }
+
+            runfunc(0, 0, 0, callbackfunc);
+            function callbackfunc(o, p, q) {
+                if (o == ar_o.length) {
+                    return;
+                }
+//                console.log(o, p, q);
+                console.log(ar_o[o].m, p, ar_q[q]);
+                k = ar_q[q];
+                ar_o[o].f();
+//                setTimeout(function () {
+//                    console.dir(centers.slice().sort(function (a, b) {
+//                        return a.dots.length - b.dots.length;
+//                    }));
+//                }, 1000);
+                if (o < ar_o.length) {
+                    if (p == ar_o[o].n) {
+                        if (q == ar_q.length - 1) {
+                            setTimeout(function () {
+                                callbackfunc(o + 1, 0, 0);
+                            }, 1200);
+                        } else {
+                            setTimeout(function () {
+                                callbackfunc(o, 0, q + 1);
+                            }, 1200);
+                        }
+                    } else {
+                        setTimeout(function () {
+                            callbackfunc(o, p + 1, q);
+                        }, 1200);
+                    }
+                } else {
+//ends
+                }
+            }
         });
     }
     function refresh() {
-        messageg = d3.select(".messageg");
-        messageg.selectAll(".message").text("");
-        messageg.selectAll(".message_detail").data([]).exit().remove();
         d3.selectAll("circle").transition();
         d3.select(".wrapper").remove();
         d3.select(".wrapper1").append("div").attr("class", "wrapper");
@@ -573,24 +405,17 @@
             keyset = d3.keys(dataset[0]).filter(function (k) {
                 return k != "index";
             });
-//            init public variables
-            init(dataset);
-            draw(dataset);
 //            initialize centers
-            init_centers();
+            pick_function();
         } else {
             dsv(sourcetype, function (error, data) {
                 if (error) throw error;
-                console.dir(data);
                 dataset = data.slice();
                 keyset = d3.keys(dataset[0]).filter(function (k) {
                     return k != "index";
                 });
-//            init public variables
-                init(dataset);
-                draw(dataset);
 //            initialize centers
-                init_centers();
+                pick_function();
             });
         }
     }
