@@ -119,31 +119,39 @@
                         //finalize
                         path.style("fill-opacity", 1);
                         var display_message = "Stabilized at " + j + " times;";
-                        centers.sort(function (a, b) {
-                            return a.dots.length - b.dots.length;
-                        }).forEach(function (d, i) {
-                            d.adist = 0;
-                            d.dots.forEach(function (a) {
-                                d.adist += distance(d, a, keyset);
-                            });
-                            d.adist = d.adist / d.dots.length;
-                            console.log("Center", i, "has", d.dots.length, "elements with avarage distance", d.adist);
-                        });
                         messageg.selectAll(".message").text(display_message);
                         messageg.selectAll(".message_detail").data(centers.sort(function (a, b) {
                             return a.dots.length - b.dots.length;
-                        })).enter().append("text").attr("class", "message_detail").text(function (d, i) {
+                        })).enter().append("text")
+                                .attr("dy", ".35em")
+                                .style("text-anchor", "middle")
+                                .attr("class", "message_detail").text(function (d, i) {
                             d.adist = 0;
                             d.dots.forEach(function (a) {
-                                d.adist += distance(d, a, keyset);
+                                d.adist += distance_sqrt(d, a, keyset);
                             });
                             d.adist = d.adist / d.dots.length;
                             return "Center" + i + " has " + d.dots.length
-                                    + " elements with avarage distance=" + Math.round(d.adist * 1000) / 1000;
+                                    + " elements with avarage distance = " + Math.round(d.adist * 1000) / 1000;
                         }).attr("transform", function (d, i) {
-                            return "translate(240," + 40 * (i+2) + ")";
-                        }).attr("dy", ".35em").style("text-anchor", "middle");
-
+                            return "translate(240," + 40 * (i + 2) + ")";
+                        });
+                        messageg.append("text")
+                                .attr("dy", ".35em")
+                                .style("text-anchor", "middle")
+                                .attr("class", "message_detail").text(function () {
+                            return "Total cost = "+Math.round(centers.map(function (d) {
+                                                d.sdist = 0;
+                                                d.dots.forEach(function (a) {
+                                                    d.sdist += distance_sqrt(d, a, keyset);
+                                                })
+                                                return d.sdist;
+                                            }).reduce(function (a, b) {
+                                                return a + b;
+                                            }) / dataset.length * 1000) / 1000;
+                        }).attr("transform", function () {
+                            return "translate(240," + 40 * (centers.length + 2) + ")";
+                        });
                     } else {
                         myLoop(++j);
                     }
@@ -411,7 +419,6 @@
                 r.dots = [];
                 return r;
             });
-
             compute_centers();
         }
         function draw(data) {
@@ -465,7 +472,7 @@
     </div>
 </div>
 <div class="message_div">
-    <svg height="900" width="600">
+    <svg height="300" width="500">
         <g class="messageg">
             <text class="message" dy=".35em" transform="translate(200,40)" style="text-anchor: middle;">
             </text>
