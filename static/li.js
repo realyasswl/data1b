@@ -21,6 +21,9 @@ var distance = function (v1, v2, keys) {
     }
     return dis;
 }
+var distance_sqrt = function (v1, v2, keys) {
+    return Math.sqrt(distance(v1, v2, keys));
+}
 
 function deepcopy(list, keys) {
     var a = [];
